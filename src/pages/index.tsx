@@ -3,14 +3,17 @@ import { socket } from "../socket";
 
 interface QueueItem {
   id: string;
+  sequence: number;
   prompt: string;
   status: string;
   result?: string;
-  createdAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 export default function Home() {
   const [items, setItems] = useState<QueueItem[]>([]);
+  const [lastSequence, setLastSequence] = useState<number>(0);
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -35,37 +38,71 @@ export default function Home() {
       setTransport("N/A");
     }
 
-    // 초기 동기화 이벤트 처리
-    function onInitialSync(initialState: any) {
-      console.log("Received initial state");
-      setItems(initialState);
+    // 서버로부터 현재 시퀀스 번호 수신
+    function onCurrentSequence(sequence: number) {
+      setLastSequence(sequence);
+      // 누락된 아이템이 있는지 확인하고 요청
+      if (sequence > lastSequence) {
+        socket.emit("requestItemsAfter", lastSequence);
+      }
     }
 
-    // 큐 업데이트 이벤트 처리
-    function onQueueUpdated({ type, item }: { type: string; item: any }) {
-      if (type === "added") {
-        setItems((prev: any[]) => {
-          // 중복 체크
-          if (prev.some((existingItem) => existingItem.id === item.id)) {
-            return prev;
+    // 새로운 아이템 추가 이벤트 처리
+    function onItemAdded(item: QueueItem) {
+      console.log("New item added:", item);
+      // 시퀀스 번호가 예상과 다르면 누락된 아이템 요청
+      if (item.sequence > lastSequence + 1) {
+        socket.emit("requestItemsAfter", lastSequence);
+        return;
+      }
+      setItems((prev) => [...prev, item]);
+      setLastSequence(item.sequence);
+    }
+
+    // 아이템 업데이트 이벤트 처리
+    function onItemUpdated(updatedItem: QueueItem) {
+      console.log("Item updated:", updatedItem);
+      setItems((prev) =>
+        prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+      );
+    }
+
+    // 누락된 아이템 동기화 처리
+    function onItemsSync(syncedItems: QueueItem[]) {
+      console.log("Syncing items:", syncedItems);
+      setItems((prev) => {
+        const newItems = [...prev];
+        syncedItems.forEach((syncedItem) => {
+          const index = newItems.findIndex((item) => item.id === syncedItem.id);
+          if (index === -1) {
+            newItems.push(syncedItem);
+          } else {
+            newItems[index] = syncedItem;
           }
-          return [...prev, item];
         });
+        return newItems.sort((a, b) => a.sequence - b.sequence);
+      });
+      if (syncedItems.length > 0) {
+        setLastSequence(Math.max(...syncedItems.map((item) => item.sequence)));
       }
     }
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    socket.on("initialSync", onInitialSync);
-    socket.on("queueUpdated", onQueueUpdated);
+    socket.on("currentSequence", onCurrentSequence);
+    socket.on("itemAdded", onItemAdded);
+    socket.on("itemUpdated", onItemUpdated);
+    socket.on("itemsSync", onItemsSync);
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
-      socket.off("initialSync", onInitialSync);
-      socket.off("queueUpdated", onQueueUpdated);
+      socket.off("currentSequence", onCurrentSequence);
+      socket.off("itemAdded", onItemAdded);
+      socket.off("itemUpdated", onItemUpdated);
+      socket.off("itemsSync", onItemsSync);
     };
-  }, []);
+  }, [lastSequence]);
 
   // 새로운 요청 추가
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -83,7 +120,14 @@ export default function Home() {
       });
 
       if (response.ok) {
+        const newItem = await response.json();
+        console.log("New item created:", newItem);
+        // 응답으로 받은 아이템을 바로 추가
+        setItems((prev) => [...prev, newItem]);
+        setLastSequence(newItem.sequence);
         setPrompt("");
+      } else {
+        console.error("Failed to add item:", await response.text());
       }
     } catch (error) {
       console.error("Failed to add queue item:", error);
