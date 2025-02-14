@@ -12,7 +12,7 @@ const handler = app.getRequestHandler();
 app.prepare().then(() => {
   const httpServer = createServer(handler);
 
-  const io = new Server(httpServer);
+  const io = new Server(httpServer, { path: "/api/socketio" });
 
   io.on("connection", (socket) => {
     console.log("Client connected");

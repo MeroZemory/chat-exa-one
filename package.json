@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS='--inspect' ts-node server.ts",
-    "build": "next build",
-    "start": "cross-env NODE_ENV=production ts-node server.ts",
+    "dev": "cross-env NODE_OPTIONS='--inspect' ts-node --project server.tsconfig.json server.ts",
+    "build": "next build && tsc -p server.tsconfig.json",
+    "start": "cross-env NODE_ENV=production node dist/server.js",
     "lint": "next lint"
   },
   "dependencies": {
@@ -19,7 +19,6 @@
     "@types/node": "^20.17.19",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/socket.io-client": "^3.0.0",
     "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.1.7",
