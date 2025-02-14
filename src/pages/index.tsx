@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { socket } from "../socket";
 
 interface QueueItem {
@@ -17,7 +17,16 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [isButtonClickComplete, setIsButtonClickComplete] = useState(false);
   const [transport, setTransport] = useState("N/A");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 버튼 클릭 완료 후 입력 필드 포커스 설정
+  useEffect(() => {
+    if (isButtonClickComplete) {
+      inputRef.current?.focus();
+    }
+  }, [isButtonClickComplete]);
 
   useEffect(() => {
     if (socket.connected) {
@@ -105,9 +114,9 @@ export default function Home() {
   }, [lastSequence]);
 
   // 새로운 요청 추가
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!prompt.trim() || !isConnected) return;
+  const handleSubmit = async () => {
+    if (!isConnected || isLoading || !prompt.trim()) return;
+    const promptTrim = prompt.trim();
 
     setIsLoading(true);
     try {
@@ -116,7 +125,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt: promptTrim }),
       });
 
       if (response.ok) {
@@ -136,6 +145,25 @@ export default function Home() {
     }
   };
 
+  // 입력 필드 이벤트 핸들러
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isLoading) return;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.shiftKey) {
+        // 줄바꿈 처리
+        const textArea = e.target as HTMLTextAreaElement;
+        textArea.value = textArea.value.replace(/\n/g, "\n");
+        return;
+      }
+
+      handleSubmit();
+    }
+  };
+
   return (
     <div className="min-h-screen p-8">
       <main className="max-w-4xl mx-auto">
@@ -151,25 +179,36 @@ export default function Home() {
         </div>
 
         {/* 새 요청 입력 폼 */}
-        <form onSubmit={handleSubmit} className="mb-8">
+        <div className="mb-8">
           <div className="flex gap-4">
             <input
+              ref={inputRef}
               type="text"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="프롬프트를 입력하세요"
-              className="flex-1 p-2 border rounded"
-              disabled={isLoading || !isConnected}
+              className="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!isConnected}
+              readOnly={isLoading}
             />
             <button
-              type="submit"
-              disabled={isLoading || !isConnected}
+              type="button"
+              disabled={!isConnected || isLoading || !prompt.trim()}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+              onClick={async () => {
+                try {
+                  setIsButtonClickComplete(false);
+                  await handleSubmit();
+                } finally {
+                  setIsButtonClickComplete(true);
+                }
+              }}
             >
               {isLoading ? "처리 중..." : "요청 추가"}
             </button>
           </div>
-        </form>
+        </div>
 
         {/* 큐 아이템 목록 */}
         <div className="space-y-4">
