@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "nodemon --watch server.ts --ext ts --exec \"tsc -p server.tsconfig.json && cross-env NODE_OPTIONS='--inspect' node dist/server.js\"",
+    "dev:tsc": "tsc -p server.tsconfig.json --watch",
+    "dev:server": "cross-env NODE_OPTIONS='--inspect' nodemon --watch dist dist/server.js",
+    "predev": "rimraf dist",
+    "dev": "concurrently \"npm run dev:tsc\" \"npm run dev:server\"",
     "build": "next build && tsc -p server.tsconfig.json",
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "lint": "next lint"
@@ -25,6 +28,7 @@
     "eslint-config-next": "15.1.7",
     "nodemon": "^3.1.9",
     "postcss": "^8",
+    "rimraf": "^6.0.1",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
