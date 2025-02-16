@@ -138,6 +138,8 @@ export default function Home() {
           clearTimeout(cooldownTimerRef.current);
         }
       };
+    } else if (!waitStatus.isCooldown) {
+      setLastErrorMessage(null);
     }
   }, [waitStatus]);
 
