@@ -26,13 +26,15 @@ interface EnqueueResult {
 }
 
 interface WaitStatus {
-  waitTo: Date | null;
+  nextRestTime: Date | null;
   requestId?: string; // 현재 대기 중인 요청의 ID
   isCooldown: boolean; // 쿨다운 상태 여부
 }
 
 const isCooldownEnd = (waitStatus: WaitStatus) => {
-  return waitStatus.waitTo !== null && new Date() >= waitStatus.waitTo;
+  return (
+    waitStatus.nextRestTime !== null && new Date() >= waitStatus.nextRestTime
+  );
 };
 
 export default function Home() {
@@ -42,7 +44,7 @@ export default function Home() {
   }>({});
   const [prompt, setPrompt] = useState("");
   const [waitStatus, setWaitStatus] = useState<WaitStatus>({
-    waitTo: null,
+    nextRestTime: null,
     requestId: undefined,
     isCooldown: false,
   });
@@ -80,7 +82,7 @@ export default function Home() {
     const checkWaitingEnd = () => {
       if (isCooldownEnd(waitStatus)) {
         setWaitStatus({
-          waitTo: null,
+          nextRestTime: null,
           requestId: undefined,
           isCooldown: false,
         });
@@ -108,22 +110,22 @@ export default function Home() {
 
   // 쿨다운 타이머 관리
   useEffect(() => {
-    if (waitStatus.waitTo && waitStatus.isCooldown) {
+    if (waitStatus.nextRestTime && waitStatus.isCooldown) {
       const updateCooldown = () => {
         const now = new Date();
-        const waitTo = waitStatus.waitTo;
-        if (!waitTo) return;
+        const nextRestTime = waitStatus.nextRestTime;
+        if (!nextRestTime) return;
 
-        if (now >= waitTo) {
+        if (now >= nextRestTime) {
           setWaitStatus({
-            waitTo: null,
+            nextRestTime: null,
             requestId: undefined,
             isCooldown: false,
           });
           setLastErrorMessage(null);
         } else {
           const remainingSeconds = Math.ceil(
-            (waitTo.getTime() - now.getTime()) / 1000
+            (nextRestTime.getTime() - now.getTime()) / 1000
           );
           setLastErrorMessage(
             `요청 빈도가 너무 높습니다. ${remainingSeconds}초 후에 다시 시도해주세요.`
@@ -206,7 +208,7 @@ export default function Home() {
         (update.type === "completed" || update.type === "failed")
       ) {
         setWaitStatus({
-          waitTo: null,
+          nextRestTime: null,
           requestId: undefined,
           isCooldown: false,
         });
@@ -251,7 +253,7 @@ export default function Home() {
           return newPendingItems;
         });
         setWaitStatus({
-          waitTo: null,
+          nextRestTime: null,
           requestId: undefined,
           isCooldown: false,
         });
@@ -267,7 +269,7 @@ export default function Home() {
         const resetTime = new Date(result.nextResetTime);
         // 버킷 초과 시에만 웨이팅 설정
         setWaitStatus({
-          waitTo: resetTime,
+          nextRestTime: resetTime,
           requestId: responseId,
           isCooldown: true,
         });
