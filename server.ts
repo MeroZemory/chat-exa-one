@@ -76,6 +76,11 @@ app.prepare().then(() => {
       socket.emit("itemsSync", items);
     });
 
+    // 현재 시퀀스 번호 요청 처리
+    socket.on("getCurrentSequence", (callback) => {
+      callback(queue.getCurrentSequence());
+    });
+
     // 새로운 큐 아이템 추가 요청 처리
     socket.on("enqueueItem", (prompt: string) => {
       console.log("Received enqueueItem request:", prompt);

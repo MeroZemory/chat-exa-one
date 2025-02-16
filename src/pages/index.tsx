@@ -54,6 +54,29 @@ export default function Home() {
       setIsConnected(true);
       setTransport(socket.io.engine.transport.name);
       console.log("Connected to socket");
+
+      // 재연결시 서버의 현재 상태와 클라이언트의 pending 항목들을 비교
+      setPendingItems((prev) => {
+        const pendingIds = Object.keys(prev);
+        if (pendingIds.length > 0) {
+          // 서버의 현재 시퀀스 번호 요청
+          socket.emit("getCurrentSequence", (serverSequence: number) => {
+            // 서버 시퀀스보다 큰 번호를 가진 pending 항목들을 실패 처리
+            Object.values(prev).forEach((item) => {
+              if (item.sequence > serverSequence) {
+                const failedItem: QueueItem = {
+                  ...item,
+                  status: "failed",
+                  result: "서버 재시작으로 인해 요청이 취소되었습니다.",
+                  updatedAt: new Date(),
+                };
+                onItemUpdated(failedItem);
+              }
+            });
+          });
+        }
+        return prev;
+      });
     }
 
     function onDisconnect() {
