@@ -366,13 +366,11 @@ export default function Home() {
         <h1 className="text-3xl font-bold mb-8">ExaOne 3.5 큐 시스템</h1>
 
         {/* 연결 상태 표시 */}
-        <div
-          className={`mb-4 text-sm ${
-            isConnected ? "text-green-600" : "text-red-600"
-          }`}
-        >
-          {isConnected ? `서버와 연결됨 (${transport})` : "서버와 연결 끊김"}
-        </div>
+        {isConnected && (
+          <div className="mb-4 text-sm text-green-600">
+            서버와 연결됨 ({transport})
+          </div>
+        )}
 
         {/* 에러 메시지 표시 */}
         {lastErrorMessage && (
@@ -463,10 +461,10 @@ export default function Home() {
                     item.status === "completed"
                       ? "bg-green-100 text-green-800"
                       : item.status === "failed"
-                      ? "bg-red-100 text-red-800"
-                      : item.status === "processing"
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-gray-100 text-gray-800"
+                        ? "bg-red-100 text-red-800"
+                        : item.status === "processing"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-gray-100 text-gray-800"
                   }`}
                 >
                   {item.status}

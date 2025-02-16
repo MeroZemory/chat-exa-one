@@ -72,6 +72,7 @@ const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
 const port = 3000;
 // when using middleware `hostname` and `port` must be provided below
+// Next.js 앱 초기화
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
@@ -116,7 +117,9 @@ async function processMessages() {
   }
 }
 
+// Next.js 준비
 app.prepare().then(() => {
+  // HTTP 서버 생성하면서 Next.js 핸들러 연결
   const httpServer = createServer(handler);
 
   const io = new Server(httpServer, { path: "/api/socketio" });

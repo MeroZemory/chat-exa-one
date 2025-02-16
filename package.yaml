@@ -9,22 +9,32 @@ scripts:
   
   # 개발 관련 스크립트
   dev:tsc: tsc -p server.tsconfig.json --watch
-  dev:server: nodemon --watch build --exec "node .server/server.js"
-  dev: npm run yaml && rimraf dist && npm run build-server && concurrently "npm run dev:tsc" "npm run dev:server"
+  dev:server: cross-env NODE_OPTIONS= nodemon --watch src-server --exec "node .server/server.js"
+  dev: npm run build-server && concurrently "npm run dev:tsc" "npm run dev:server"
   
   # 디버그
-  debug: cross-env NODE_OPTIONS='--inspect' npm run dev
+  predebug: cross-env NODE_OPTIONS= npm run yaml
+  debug:server: cross-env NODE_OPTIONS='--inspect=9229' nodemon --watch src-server --exec "node .server/server.js"
+  debug: cross-env NODE_OPTIONS= concurrently "npm run dev:tsc" "npm run debug:server"
 
   # 빌드 관련 스크립트
   build-server: tsc -p server.tsconfig.json
   build-next: next build
-  build: npm run yaml && npm run build-server && npm run build-next
+  build: npm run build-server && npm run build-next
 
   # 배포 관련 스크립트
-  dist: rimraf .server .next dist && npm run build && copyfiles -f .server/* dist/ && copyfiles -f .next/* dist/
+  dist: >-
+    rimraf .server .next dist &&
+    npm run build && 
+    copyfiles -u 1 ".server/**/*" dist/server/ && 
+    copyfiles -u 1 ".next/**/*" dist/.next/ && 
+    copyfiles package.json dist/
   
   # 서버 실행
-  start: cross-env NODE_ENV=production node dist/server.js
+  start: >-
+    cd dist && 
+    npm install --omit=dev && 
+    cross-env NODE_ENV=production node server/server.js
   
   # 기타
   lint: npm run yaml && next lint
