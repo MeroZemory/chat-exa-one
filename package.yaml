@@ -2,6 +2,7 @@
 name: chat-exa-one
 version: 0.1.0
 private: true
+main: dist/server/server.js
 
 scripts:
   # YAML 변환
@@ -32,10 +33,12 @@ scripts:
   
   # 서버 실행
   start: >-
-    cd dist && 
     npm install --omit=dev && 
-    cross-env NODE_ENV=production node server/server.js
+    cross-env NODE_ENV=production node --experimental-fetch --experimental-global-webcrypto server/server.js
   
+  start:local: >-
+    cd dist && npm run start
+
   # 기타
   lint: npm run yaml && next lint
 
@@ -46,6 +49,7 @@ dependencies:
   react-dom: ^19.0.0
   react-hot-toast: ^2.5.2
   socket.io: ^4.8.1
+  cross-env: ^7.0.3
 
 # 개발 의존성
 devDependencies:
@@ -55,7 +59,6 @@ devDependencies:
   "@types/react-dom": ^19
   concurrently: ^9.1.2
   copyfiles: ^2.4.1
-  cross-env: ^7.0.3
   eslint: ^9
   eslint-config-next: 15.1.7
   js-yaml: ^4.1.0

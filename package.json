@@ -2,6 +2,7 @@
   "name": "chat-exa-one",
   "version": "0.1.0",
   "private": true,
+  "main": "dist/server/server.js",
   "scripts": {
     "yaml": "node yaml-to-json.mjs",
     "dev:tsc": "tsc -p server.tsconfig.json --watch",
@@ -13,8 +14,9 @@
     "build-server": "tsc -p server.tsconfig.json",
     "build-next": "next build",
     "build": "npm run build-server && npm run build-next",
-    "dist": "rimraf .server .next dist && npm run build &&  copyfiles -u 1 \".server/**/*\" dist/server/ &&  copyfiles -u 1 \".next/**/*\" dist/next/ &&  copyfiles package.json dist/",
-    "start": "cd dist &&  npm install --omit=dev &&  cross-env NODE_ENV=production node server/server.js",
+    "dist": "rimraf .server .next dist && npm run build &&  copyfiles -u 1 \".server/**/*\" dist/server/ &&  copyfiles -u 1 \".next/**/*\" dist/.next/ &&  copyfiles package.json dist/",
+    "start": "npm install --omit=dev &&  cross-env NODE_ENV=production node --experimental-fetch --experimental-global-webcrypto server/server.js",
+    "start:local": "cd dist && npm run start",
     "lint": "npm run yaml && next lint"
   },
   "dependencies": {
@@ -22,7 +24,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "cross-env": "^7.0.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -31,7 +34,6 @@
     "@types/react-dom": "^19",
     "concurrently": "^9.1.2",
     "copyfiles": "^2.4.1",
-    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.1.7",
     "js-yaml": "^4.1.0",
