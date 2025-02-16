@@ -1,0 +1,8 @@
+---
+description: 주요 사항
+globs: 
+---
+
+# Your rule content
+
+- 서버에 Next.js가 통합되어 있어서 next dev 필요 없음
