@@ -42,6 +42,11 @@ class LeakyBucket {
 
 // 소켓별 버킷 관리
 const socketBuckets = new Map<string, LeakyBucket>();
+const socketTimeouts = new Map<string, NodeJS.Timeout>();
+const SOCKET_TIMEOUT = 5 * 1000; // 5초 동안 사용하지 않으면 연결 해제
+
+// 소켓 활성 상태 추적
+const activeSocketIds = new Set<string>();
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -65,7 +70,7 @@ async function processMessages() {
         );
 
         // 실제 ExaOne API 호출 대신 임시로 에코 응답
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
         queue.updateItem(item.id, {
           status: "completed",
@@ -106,10 +111,37 @@ app.prepare().then(() => {
   });
 
   io.on("connection", (socket) => {
-    console.log("Client connected");
+    console.log("Client connected:", socket.id);
+    activeSocketIds.add(socket.id);
+
+    // 소켓 타임아웃 설정/갱신 함수
+    const resetSocketTimeout = () => {
+      // 활성 상태가 아닌 경우에만 타임아웃 설정
+      if (!activeSocketIds.has(socket.id)) {
+        return;
+      }
+
+      // 기존 타임아웃이 있다면 제거
+      const existingTimeout = socketTimeouts.get(socket.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      // 새로운 타임아웃 설정
+      const timeout = setTimeout(() => {
+        console.log("Socket timeout, disconnecting:", socket.id);
+        activeSocketIds.delete(socket.id);
+        socket.disconnect(true);
+        socketBuckets.delete(socket.id);
+        socketTimeouts.delete(socket.id);
+      }, SOCKET_TIMEOUT);
+
+      socketTimeouts.set(socket.id, timeout);
+    };
 
     // 소켓별 리키버킷 생성 (용량: 10, 분당 처리율: 5)
     socketBuckets.set(socket.id, new LeakyBucket(10, 5));
+    resetSocketTimeout(); // 초기 타임아웃 설정
 
     // 클라이언트 연결 시 전체 큐 목록 전송 (이력만)
     socket.emit("itemsSync", queue.getAllItems());
@@ -127,6 +159,8 @@ app.prepare().then(() => {
 
     // 새로운 큐 아이템 추가 요청 처리
     socket.on("enqueueItem", (prompt: string, requestId: string) => {
+      resetSocketTimeout(); // 메시지 전송 시 타임아웃 리셋
+
       const bucket = socketBuckets.get(socket.id);
       if (!bucket) {
         socket.emit(
@@ -180,8 +214,14 @@ app.prepare().then(() => {
     });
 
     socket.on("disconnect", () => {
-      console.log("Client disconnected");
+      console.log("Client disconnected:", socket.id);
+      activeSocketIds.delete(socket.id);
       socketBuckets.delete(socket.id);
+      const timeout = socketTimeouts.get(socket.id);
+      if (timeout) {
+        clearTimeout(timeout);
+        socketTimeouts.delete(socket.id);
+      }
     });
   });
 

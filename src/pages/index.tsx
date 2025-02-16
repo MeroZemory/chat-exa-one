@@ -55,6 +55,16 @@ export default function Home() {
   const cooldownTimerRef = useRef<NodeJS.Timeout>(null);
   const [isInputActive, setIsInputActive] = useState(false);
 
+  // 소켓 연결 상태 풀링
+  useEffect(() => {
+    const checkConnection = () => {
+      const isConnected = socket.connected;
+      setIsConnected(isConnected);
+    };
+    const interval = setInterval(checkConnection, 100);
+    return () => clearInterval(interval);
+  }, []);
+
   // 입력 가능 상태가 되면 포커스 복원
   useEffect(() => {
     const input = inputRef.current;
@@ -65,9 +75,8 @@ export default function Home() {
     }
   }, [isConnected, waitStatus.isCooldown, isInputActive]);
 
-  // 컴포넌트 마운트 시 소켓 연결 시작
+  // 쿨다운 종료 풀링
   useEffect(() => {
-    // 대기 종료 확인
     const checkWaitingEnd = () => {
       if (isCooldownEnd(waitStatus)) {
         setWaitStatus({
@@ -87,9 +96,12 @@ export default function Home() {
     };
     const interval = setInterval(checkWaitingEnd, 100); // 100ms 마다 검사
 
-    socket.connect();
+    // 연결이 끊어진 경우에만 연결 시도
+    if (!socket.connected) {
+      socket.connect();
+    }
+
     return () => {
-      socket.disconnect();
       clearInterval(interval);
     };
   }, [waitStatus]);
@@ -291,8 +303,28 @@ export default function Home() {
 
   // 새로운 요청 추가
   const handleSubmit = async () => {
-    if (!isConnected || !prompt.trim()) return;
+    if (!prompt.trim()) return;
     if (waitStatus.isCooldown) return;
+
+    // 연결이 끊어진 상태면 재연결 시도
+    if (!isConnected) {
+      socket.connect();
+      await new Promise((resolve) => {
+        const onConnect = () => {
+          socket.off("connect", onConnect);
+          resolve(true);
+        };
+        socket.on("connect", onConnect);
+        // 3초 이내 연결 실패시 에러
+        setTimeout(() => {
+          if (!socket.connected) {
+            socket.off("connect", onConnect);
+            setLastErrorMessage("서버 연결에 실패했습니다.");
+          }
+          resolve(false);
+        }, 3000);
+      });
+    }
 
     const requestId = crypto.randomUUID();
 
@@ -350,7 +382,6 @@ export default function Home() {
               type="text"
               defaultValue=""
               onChange={(e) => {
-                // prompt 상태는 버튼 활성화 조건에만 사용
                 setPrompt(e.target.value);
               }}
               onKeyDown={(e) => {
@@ -362,14 +393,14 @@ export default function Home() {
               }}
               placeholder="프롬프트를 입력하세요"
               className="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!isConnected || waitStatus.isCooldown}
+              disabled={waitStatus.isCooldown}
               readOnly={waitStatus.isCooldown}
               autoFocus // 페이지 로드 시 자동 포커스
               onFocus={() => setIsInputActive(true)}
             />
             <button
               type="button"
-              disabled={!isConnected || waitStatus.isCooldown || !prompt.trim()}
+              disabled={waitStatus.isCooldown || !prompt.trim()}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors relative group"
               onClick={handleSubmit}
             >
