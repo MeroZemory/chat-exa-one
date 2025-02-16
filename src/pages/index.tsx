@@ -364,14 +364,14 @@ export default function Home() {
   return (
     <div className="min-h-screen p-8">
       <main className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">ExaOne 3.5 큐 시스템</h1>
-
-        {/* 연결 상태 표시 */}
-        {isConnected && (
-          <div className="mb-4 text-sm text-green-600">
-            서버와 연결됨 ({transport})
-          </div>
-        )}
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">ExaOne 3.5 큐 시스템</h1>
+          {isConnected && (
+            <div className="text-xs text-green-600">
+              서버 연결됨 ({transport})
+            </div>
+          )}
+        </div>
 
         {/* 에러 메시지 표시 */}
         {lastErrorMessage && (
