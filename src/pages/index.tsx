@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { socket } from "../socket";
+import { io, Socket } from "socket.io-client";
 
 interface QueueItem {
   id: string;
@@ -12,108 +12,98 @@ interface QueueItem {
 }
 
 export default function Home() {
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [items, setItems] = useState<QueueItem[]>([]);
-  const [lastSequence, setLastSequence] = useState<number>(0);
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isButtonClickComplete, setIsButtonClickComplete] = useState(false);
   const [transport, setTransport] = useState("N/A");
   const inputRef = useRef<HTMLInputElement>(null);
+  // 마지막 시퀀스 번호를 ref로 관리 (항목 순서 관리)
+  const lastSequenceRef = useRef<number>(0);
 
-  // 버튼 클릭 완료 후 입력 필드 포커스 설정
+  // 버튼 클릭 후 입력 필드 포커스 설정
   useEffect(() => {
     if (isButtonClickComplete) {
       inputRef.current?.focus();
     }
   }, [isButtonClickComplete]);
 
+  // 컴포넌트 마운트 시 새로운 소켓 인스턴스 생성
   useEffect(() => {
-    if (socket.connected) {
-      onConnect();
-    }
+    // window.location.origin을 명시적으로 지정합니다.
+    const newSocket = io(window.location.origin, { path: "/api/socketio" });
+    setSocket(newSocket);
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
 
-    function onConnect() {
+  // 소켓 이벤트 핸들러 등록 (socket이 있을 때)
+  useEffect(() => {
+    if (!socket) return;
+
+    function onConnect(socket: Socket) {
       setIsConnected(true);
       setTransport(socket.io.engine.transport.name);
-
-      socket.io.engine.on("upgrade", (transport) => {
-        setTransport(transport.name);
-      });
+      // 서버는 연결 시 자동으로 전체 큐(itemsSync)를 전송합니다.
+      console.log("Connected to socket");
     }
 
     function onDisconnect() {
       setIsConnected(false);
       setTransport("N/A");
+      console.log("Disconnected from socket");
     }
 
-    // 서버로부터 현재 시퀀스 번호 수신
-    function onCurrentSequence(sequence: number) {
-      setLastSequence(sequence);
-      // 누락된 아이템이 있는지 확인하고 요청
-      if (sequence > lastSequence) {
-        socket.emit("requestItemsAfter", lastSequence);
+    // 서버에서 전체 큐 목록을 전달할 때
+    function onItemsSync(syncedItems: QueueItem[]) {
+      console.log("Received itemsSync:", syncedItems);
+      const sortedItems = [...syncedItems].sort(
+        (a, b) => a.sequence - b.sequence
+      );
+      setItems(sortedItems);
+      if (sortedItems.length > 0) {
+        lastSequenceRef.current = sortedItems[sortedItems.length - 1].sequence;
+      } else {
+        lastSequenceRef.current = 0;
       }
     }
 
-    // 새로운 아이템 추가 이벤트 처리
+    // 새로운 항목 추가 이벤트
     function onItemAdded(item: QueueItem) {
-      console.log("New item added:", item);
-      // 시퀀스 번호가 예상과 다르면 누락된 아이템 요청
-      if (item.sequence > lastSequence + 1) {
-        socket.emit("requestItemsAfter", lastSequence);
-        return;
-      }
+      console.log("Received itemAdded:", item);
+      // 시퀀스 번호가 중복되거나 이전 항목이면 무시
+      if (item.sequence <= lastSequenceRef.current) return;
       setItems((prev) => [...prev, item]);
-      setLastSequence(item.sequence);
+      lastSequenceRef.current = item.sequence;
     }
 
-    // 아이템 업데이트 이벤트 처리
+    // 항목 업데이트 이벤트
     function onItemUpdated(updatedItem: QueueItem) {
-      console.log("Item updated:", updatedItem);
+      console.log("Received itemUpdated:", updatedItem);
       setItems((prev) =>
         prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
       );
     }
 
-    // 누락된 아이템 동기화 처리
-    function onItemsSync(syncedItems: QueueItem[]) {
-      console.log("Syncing items:", syncedItems);
-      setItems((prev) => {
-        const newItems = [...prev];
-        syncedItems.forEach((syncedItem) => {
-          const index = newItems.findIndex((item) => item.id === syncedItem.id);
-          if (index === -1) {
-            newItems.push(syncedItem);
-          } else {
-            newItems[index] = syncedItem;
-          }
-        });
-        return newItems.sort((a, b) => a.sequence - b.sequence);
-      });
-      if (syncedItems.length > 0) {
-        setLastSequence(Math.max(...syncedItems.map((item) => item.sequence)));
-      }
-    }
-
-    socket.on("connect", onConnect);
+    socket.on("connect", () => onConnect(socket));
     socket.on("disconnect", onDisconnect);
-    socket.on("currentSequence", onCurrentSequence);
+    socket.on("itemsSync", onItemsSync);
     socket.on("itemAdded", onItemAdded);
     socket.on("itemUpdated", onItemUpdated);
-    socket.on("itemsSync", onItemsSync);
 
     return () => {
-      socket.off("connect", onConnect);
+      socket.off("connect", () => onConnect(socket));
       socket.off("disconnect", onDisconnect);
-      socket.off("currentSequence", onCurrentSequence);
+      socket.off("itemsSync", onItemsSync);
       socket.off("itemAdded", onItemAdded);
       socket.off("itemUpdated", onItemUpdated);
-      socket.off("itemsSync", onItemsSync);
     };
-  }, [lastSequence]);
+  }, [socket]);
 
-  // 새로운 요청 추가
+  // 새로운 요청 추가 (POST /api/queue)
   const handleSubmit = async () => {
     if (!isConnected || isLoading || !prompt.trim()) return;
     const promptTrim = prompt.trim();
@@ -122,18 +112,16 @@ export default function Home() {
     try {
       const response = await fetch("/api/queue", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptTrim }),
       });
 
       if (response.ok) {
         const newItem = await response.json();
-        console.log("New item created:", newItem);
-        // 응답으로 받은 아이템을 바로 추가
+        console.log("New item created (via POST):", newItem);
+        // 응답 받은 항목을 바로 추가 (서버에서 itemAdded 이벤트가 발생하더라도 중복되지 않도록)
         setItems((prev) => [...prev, newItem]);
-        setLastSequence(newItem.sequence);
+        lastSequenceRef.current = newItem.sequence;
         setPrompt("");
       } else {
         console.error("Failed to add item:", await response.text());
@@ -145,21 +133,18 @@ export default function Home() {
     }
   };
 
-  // 입력 필드 이벤트 핸들러
+  // 입력 필드 keyDown 핸들러
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (isLoading) return;
-
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-
       if (e.shiftKey) {
         // 줄바꿈 처리
         const textArea = e.target as HTMLTextAreaElement;
         textArea.value = textArea.value.replace(/\n/g, "\n");
         return;
       }
-
       handleSubmit();
     }
   };

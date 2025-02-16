@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "node-terminal",
+            "type": "node",
             "request": "launch",
             "name": "Next.js: debug server-side",
-            "command": "npm run dev",
+            "program": "${workspaceFolder}/dist/server.js",
             "sourceMaps": true,
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/**",
@@ -17,7 +17,13 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "preLaunchTask": "tsc: build - server.tsconfig.json"
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "preLaunchTask": "tsc: build - server.tsconfig.json",
+            "env": {
+                "NODE_OPTIONS": "--inspect"
+            }
         },
         {
             "type": "chrome",

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
-import { queue } from "./src/lib/queue";
+import { queue } from "./shared/lib/queue";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -18,6 +18,7 @@ app.prepare().then(() => {
   // Queue 이벤트 리스너 설정
   queue.onItemAdded((item) => {
     io.emit("itemAdded", item);
+    console.log(`itemAdded: ${item.id}. items: ${queue.getAllItems()}`);
   });
 
   queue.onItemUpdated((item) => {
@@ -27,8 +28,8 @@ app.prepare().then(() => {
   io.on("connection", (socket) => {
     console.log("Client connected");
 
-    // 클라이언트 연결 시 현재 시퀀스 번호 전송
-    socket.emit("currentSequence", queue.getCurrentSequence());
+    // 클라이언트 연결 시 전체 큐 목록 전송
+    socket.emit("itemsSync", queue.getAllItems());
 
     // 클라이언트가 특정 시퀀스 이후의 아이템을 요청할 때
     socket.on("requestItemsAfter", (sequence: number) => {

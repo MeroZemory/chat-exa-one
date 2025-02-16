@@ -7,5 +7,6 @@
     "outDir": "dist",
     "sourceMap": true
   },
-  "include": ["server.ts"]
+  "include": ["server.ts", "shared/**/*"],
+  "exclude": ["src/**/*"]
 }
