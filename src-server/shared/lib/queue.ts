@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from "uuid";
+
 export interface QueueItem {
   id: string;
   sequence: number;
@@ -89,7 +91,7 @@ class Queue {
   enqueue(prompt: string, initialData?: Partial<QueueItem>): QueueItem {
     const state = getQueueState();
     const item: QueueItem = {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       sequence: ++state.currentSequence,
       prompt,
       status: "pending",
