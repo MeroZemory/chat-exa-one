@@ -22,8 +22,13 @@
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
-                "webpack://_N_E/*": "${webRoot}/*"
-            }
+                "webpack://_N_E/*": "${webRoot}/*",
+                "webpack://*/src/*": "${webRoot}/src/*"
+            },
+            "skipFiles": [
+                "<node_internals>/**",
+                "**/node_modules/**"
+            ]
         }
     ],
     "compounds": [
