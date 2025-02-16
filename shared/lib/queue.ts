@@ -45,24 +45,11 @@ class Queue {
   private addTestData() {
     const testItems: Omit<QueueItem, "id" | "sequence">[] = [
       {
-        prompt: "안녕하세요, 반갑습니다.",
+        prompt: "안녕",
         status: "completed",
         result: "네, 안녕하세요! 저도 반갑습니다.",
         createdAt: new Date(Date.now() - 3600000), // 1시간 전
         updatedAt: new Date(Date.now() - 3590000), // 59분 50초 전
-      },
-      {
-        prompt: "오늘 날씨는 어떤가요?",
-        status: "completed",
-        result: "오늘은 맑고 화창한 날씨입니다.",
-        createdAt: new Date(Date.now() - 1800000), // 30분 전
-        updatedAt: new Date(Date.now() - 1790000), // 29분 50초 전
-      },
-      {
-        prompt: "현재 처리 중인 요청입니다.",
-        status: "processing",
-        createdAt: new Date(Date.now() - 60000), // 1분 전
-        updatedAt: new Date(Date.now() - 50000), // 50초 전
       },
     ];
 

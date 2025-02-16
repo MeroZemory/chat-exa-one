@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
+import { socket } from "../socket"; // 기존 socket 인스턴스 import
 
 interface QueueItem {
   id: string;
@@ -11,9 +12,17 @@ interface QueueItem {
   updatedAt: string | Date;
 }
 
+interface EnqueueResult {
+  success: boolean;
+  item?: QueueItem;
+  error?: string;
+}
+
 export default function Home() {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [items, setItems] = useState<QueueItem[]>([]);
+  const [pendingItems, setPendingItems] = useState<{
+    [key: string]: QueueItem;
+  }>({});
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -30,24 +39,19 @@ export default function Home() {
     }
   }, [isButtonClickComplete]);
 
-  // 컴포넌트 마운트 시 새로운 소켓 인스턴스 생성
+  // 컴포넌트 마운트 시 소켓 연결 시작
   useEffect(() => {
-    // window.location.origin을 명시적으로 지정합니다.
-    const newSocket = io(window.location.origin, { path: "/api/socketio" });
-    setSocket(newSocket);
+    socket.connect();
     return () => {
-      newSocket.disconnect();
+      socket.disconnect();
     };
   }, []);
 
-  // 소켓 이벤트 핸들러 등록 (socket이 있을 때)
+  // 소켓 이벤트 핸들러 등록
   useEffect(() => {
-    if (!socket) return;
-
-    function onConnect(socket: Socket) {
+    function onConnect() {
       setIsConnected(true);
       setTransport(socket.io.engine.transport.name);
-      // 서버는 연결 시 자동으로 전체 큐(itemsSync)를 전송합니다.
       console.log("Connected to socket");
     }
 
@@ -61,11 +65,11 @@ export default function Home() {
     function onItemsSync(syncedItems: QueueItem[]) {
       console.log("Received itemsSync:", syncedItems);
       const sortedItems = [...syncedItems].sort(
-        (a, b) => a.sequence - b.sequence
+        (a, b) => b.sequence - a.sequence
       );
       setItems(sortedItems);
       if (sortedItems.length > 0) {
-        lastSequenceRef.current = sortedItems[sortedItems.length - 1].sequence;
+        lastSequenceRef.current = sortedItems[0].sequence;
       } else {
         lastSequenceRef.current = 0;
       }
@@ -74,61 +78,94 @@ export default function Home() {
     // 새로운 항목 추가 이벤트
     function onItemAdded(item: QueueItem) {
       console.log("Received itemAdded:", item);
-      // 시퀀스 번호가 중복되거나 이전 항목이면 무시
-      if (item.sequence <= lastSequenceRef.current) return;
-      setItems((prev) => [...prev, item]);
-      lastSequenceRef.current = item.sequence;
+      setItems((prev) => {
+        // 이미 존재하는 항목이면 무시
+        if (prev.some((i) => i.sequence === item.sequence)) return prev;
+
+        // 적절한 위치 찾기 (내림차순)
+        const index = prev.findIndex((i) => i.sequence < item.sequence);
+        const newItems = [...prev];
+        if (index === -1) {
+          newItems.push(item);
+        } else {
+          newItems.splice(index, 0, item);
+        }
+        return newItems;
+      });
+      // 대기 중인 항목이었다면 제거
+      setPendingItems((prev) => {
+        const { [item.id]: removed, ...rest } = prev;
+        return rest;
+      });
     }
 
     // 항목 업데이트 이벤트
     function onItemUpdated(updatedItem: QueueItem) {
       console.log("Received itemUpdated:", updatedItem);
-      setItems((prev) =>
-        prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-      );
+      if (updatedItem.status !== "pending") {
+        // 상태 업데이트를 하나의 배치로 처리
+        const updateStates = () => {
+          setPendingItems((prev) => {
+            const { [updatedItem.id]: removed, ...rest } = prev;
+            return rest;
+          });
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === updatedItem.id ? updatedItem : item
+            )
+          );
+        };
+        updateStates();
+      } else {
+        setItems((prev) =>
+          prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+        );
+      }
     }
 
-    socket.on("connect", () => onConnect(socket));
+    // 큐 아이템 추가 결과 이벤트
+    function onEnqueueResult(result: EnqueueResult) {
+      console.log("Received enqueueResult:", result);
+      if (result.success && result.item) {
+        // 응답 받은 항목을 pendingItems에 추가
+        setPendingItems((prev) => ({
+          ...prev,
+          [result.item!.id]: result.item!,
+        }));
+        setPrompt("");
+      } else {
+        console.error("Failed to add item:", result.error);
+      }
+      setIsLoading(false);
+    }
+
+    socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("itemsSync", onItemsSync);
     socket.on("itemAdded", onItemAdded);
     socket.on("itemUpdated", onItemUpdated);
+    socket.on("enqueueResult", onEnqueueResult);
 
     return () => {
-      socket.off("connect", () => onConnect(socket));
+      socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("itemsSync", onItemsSync);
       socket.off("itemAdded", onItemAdded);
       socket.off("itemUpdated", onItemUpdated);
+      socket.off("enqueueResult", onEnqueueResult);
     };
-  }, [socket]);
+  }, []); // socket is now imported, not from state
 
-  // 새로운 요청 추가 (POST /api/queue)
+  // 새로운 요청 추가
   const handleSubmit = async () => {
     if (!isConnected || isLoading || !prompt.trim()) return;
     const promptTrim = prompt.trim();
 
     setIsLoading(true);
     try {
-      const response = await fetch("/api/queue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: promptTrim }),
-      });
-
-      if (response.ok) {
-        const newItem = await response.json();
-        console.log("New item created (via POST):", newItem);
-        // 응답 받은 항목을 바로 추가 (서버에서 itemAdded 이벤트가 발생하더라도 중복되지 않도록)
-        setItems((prev) => [...prev, newItem]);
-        lastSequenceRef.current = newItem.sequence;
-        setPrompt("");
-      } else {
-        console.error("Failed to add item:", await response.text());
-      }
+      socket.emit("enqueueItem", promptTrim);
     } catch (error) {
       console.error("Failed to add queue item:", error);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -197,10 +234,36 @@ export default function Home() {
 
         {/* 큐 아이템 목록 */}
         <div className="space-y-4">
+          {/* 대기 중인 항목 표시 */}
+          {Object.values(pendingItems)
+            .sort((a, b) => b.sequence - a.sequence)
+            .map((item) => (
+              <div
+                key={item.id}
+                className="p-4 border rounded shadow opacity-50"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <p className="font-medium">
+                    <span className="text-gray-500 text-sm mr-2">
+                      대기중 #{item.sequence}
+                    </span>
+                    {item.prompt}
+                  </p>
+                  <span className="px-2 py-1 rounded text-sm bg-gray-100 text-gray-800 animate-pulse">
+                    pending
+                  </span>
+                </div>
+              </div>
+            ))}
           {items.map((item) => (
             <div key={item.id} className="p-4 border rounded shadow">
               <div className="flex justify-between items-start mb-2">
-                <p className="font-medium">{item.prompt}</p>
+                <p className="font-medium">
+                  <span className="text-gray-500 text-sm mr-2">
+                    #{item.sequence}
+                  </span>
+                  {item.prompt}
+                </p>
                 <span
                   className={`px-2 py-1 rounded text-sm ${
                     item.status === "completed"
@@ -223,7 +286,7 @@ export default function Home() {
               </div>
             </div>
           ))}
-          {items.length === 0 && (
+          {items.length === 0 && Object.keys(pendingItems).length === 0 && (
             <p className="text-gray-500 text-center py-8">
               아직 큐에 요청이 없습니다.
             </p>
