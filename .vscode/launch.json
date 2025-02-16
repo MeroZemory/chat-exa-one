@@ -10,11 +10,33 @@
             "name": "Next.js: debug server-side",
             "command": "npm run dev",
             "sourceMaps": true,
-            "serverReadyAction": {
-                "pattern": "- Local:.+(https?://.+)",
-                "uriFormat": "%s",
-                "action": "debugWithChrome"
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "tsc: build - server.tsconfig.json"
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Next.js: debug client-side",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                "webpack://_N_E/*": "${webRoot}/*"
             }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Next.js: debug full stack",
+            "configurations": [
+                "Next.js: debug server-side",
+                "Next.js: debug client-side"
+            ]
         }
     ]
 }
