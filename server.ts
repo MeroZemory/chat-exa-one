@@ -3,6 +3,46 @@ import next from "next";
 import { Server } from "socket.io";
 import { queue } from "./shared/lib/queue";
 
+class LeakyBucket {
+  private capacity: number;
+  private leakRate: number; // 분당 처리할 수 있는 요청 수
+  private lastLeakTime: number;
+  private tokens: number;
+
+  constructor(capacity: number, leakRatePerMinute: number) {
+    this.capacity = capacity;
+    this.leakRate = leakRatePerMinute;
+    this.lastLeakTime = Date.now();
+    this.tokens = 0;
+  }
+
+  private leak() {
+    const now = Date.now();
+    const elapsedMinutes = (now - this.lastLeakTime) / (1000 * 60);
+    const leakedTokens = Math.floor(elapsedMinutes * this.leakRate);
+
+    this.tokens = Math.max(0, this.tokens - leakedTokens);
+    this.lastLeakTime = now;
+  }
+
+  tryConsume(): { allowed: boolean; nextResetTime: Date } {
+    this.leak();
+
+    const minutesToNextToken = 1 / this.leakRate;
+    const nextResetTime = new Date(Date.now() + minutesToNextToken * 60 * 1000);
+
+    if (this.tokens < this.capacity) {
+      this.tokens++;
+      return { allowed: true, nextResetTime };
+    }
+
+    return { allowed: false, nextResetTime };
+  }
+}
+
+// 소켓별 버킷 관리
+const socketBuckets = new Map<string, LeakyBucket>();
+
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
 const port = 3000;
@@ -58,14 +98,18 @@ app.prepare().then(() => {
 
   // Queue 이벤트 리스너 설정
   queue.onItemUpdated((item) => {
-    // completed나 failed 상태일 때만 클라이언트에 알림
-    if (item.status === "completed" || item.status === "failed") {
-      io.emit("itemUpdated", item);
-    }
+    // 상태에 따라 다른 이벤트 타입으로 전송
+    io.emit("itemUpdated", {
+      type: item.status,
+      item,
+    });
   });
 
   io.on("connection", (socket) => {
     console.log("Client connected");
+
+    // 소켓별 리키버킷 생성 (용량: 10, 분당 처리율: 5)
+    socketBuckets.set(socket.id, new LeakyBucket(10, 5));
 
     // 클라이언트 연결 시 전체 큐 목록 전송 (이력만)
     socket.emit("itemsSync", queue.getAllItems());
@@ -82,23 +126,62 @@ app.prepare().then(() => {
     });
 
     // 새로운 큐 아이템 추가 요청 처리
-    socket.on("enqueueItem", (prompt: string) => {
-      console.log("Received enqueueItem request:", prompt);
+    socket.on("enqueueItem", (prompt: string, requestId: string) => {
+      const bucket = socketBuckets.get(socket.id);
+      if (!bucket) {
+        socket.emit(
+          "enqueueResult",
+          {
+            success: false,
+            error: "버킷이 초기화되지 않았습니다.",
+          },
+          requestId
+        );
+        return;
+      }
+
+      const result = bucket.tryConsume();
+      if (!result.allowed) {
+        socket.emit(
+          "enqueueResult",
+          {
+            success: false,
+            error: "요청 빈도가 너무 높습니다.",
+            nextResetTime: result.nextResetTime,
+          },
+          requestId
+        );
+        return;
+      }
+
+      console.log(
+        "Received enqueueItem request:",
+        prompt,
+        "requestId:",
+        requestId
+      );
       try {
         const item = queue.enqueue(prompt);
-        socket.emit("enqueueResult", { success: true, item });
+        socket.emit("enqueueResult", { success: true }, requestId);
+        // 생성된 아이템을 별도 이벤트로 전송
+        io.emit("itemUpdated", { type: "created", item });
         console.log("Enqueued item successfully:", item);
       } catch (error) {
         console.error("Failed to enqueue item:", error);
-        socket.emit("enqueueResult", {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
+        socket.emit(
+          "enqueueResult",
+          {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+          requestId
+        );
       }
     });
 
     socket.on("disconnect", () => {
       console.log("Client disconnected");
+      socketBuckets.delete(socket.id);
     });
   });
 
