@@ -41,9 +41,10 @@ class LeakyBucket {
 }
 
 // 소켓별 버킷 관리
-const socketBuckets = new Map<string, LeakyBucket>();
+const socketMinuteBuckets = new Map<string, LeakyBucket>();
+const socketSecondBuckets = new Map<string, LeakyBucket>();
 const socketTimeouts = new Map<string, NodeJS.Timeout>();
-const SOCKET_TIMEOUT = 5 * 1000; // 5초 동안 사용하지 않으면 연결 해제
+const SOCKET_TIMEOUT = parseInt(process.env.SOCKET_TIMEOUT || "5000"); // 5초 동안 사용하지 않으면 연결 해제
 
 // 소켓 활성 상태 추적
 const activeSocketIds = new Set<string>();
@@ -132,15 +133,29 @@ app.prepare().then(() => {
         console.log("Socket timeout, disconnecting:", socket.id);
         activeSocketIds.delete(socket.id);
         socket.disconnect(true);
-        socketBuckets.delete(socket.id);
+        socketMinuteBuckets.delete(socket.id);
+        socketSecondBuckets.delete(socket.id);
         socketTimeouts.delete(socket.id);
       }, SOCKET_TIMEOUT);
 
       socketTimeouts.set(socket.id, timeout);
     };
 
-    // 소켓별 리키버킷 생성 (용량: 10, 분당 처리율: 5)
-    socketBuckets.set(socket.id, new LeakyBucket(10, 5));
+    // 소켓별 리키버킷 생성
+    socketMinuteBuckets.set(
+      socket.id,
+      new LeakyBucket(
+        parseInt(process.env.LEAKY_BUCKET_CAPACITY || "18"),
+        parseInt(process.env.LEAKY_BUCKET_LEAK_RATE_PER_MINUTE || "12")
+      )
+    );
+    socketSecondBuckets.set(
+      socket.id,
+      new LeakyBucket(
+        parseInt(process.env.LEAKY_BUCKET_CAPACITY_PER_SECOND || "3"),
+        parseInt(process.env.LEAKY_BUCKET_LEAK_RATE_PER_SECOND || "1") * 60 // 초당 비율을 분당 비율로 변환
+      )
+    );
     resetSocketTimeout(); // 초기 타임아웃 설정
 
     // 클라이언트 연결 시 전체 큐 목록 전송 (이력만)
@@ -159,10 +174,11 @@ app.prepare().then(() => {
 
     // 새로운 큐 아이템 추가 요청 처리
     socket.on("enqueueItem", (prompt: string, requestId: string) => {
-      resetSocketTimeout(); // 메시지 전송 시 타임아웃 리셋
+      resetSocketTimeout();
 
-      const bucket = socketBuckets.get(socket.id);
-      if (!bucket) {
+      const minuteBucket = socketMinuteBuckets.get(socket.id);
+      const secondBucket = socketSecondBuckets.get(socket.id);
+      if (!minuteBucket || !secondBucket) {
         socket.emit(
           "enqueueResult",
           {
@@ -174,14 +190,22 @@ app.prepare().then(() => {
         return;
       }
 
-      const result = bucket.tryConsume();
-      if (!result.allowed) {
+      const minuteResult = minuteBucket.tryConsume();
+      const secondResult = secondBucket.tryConsume();
+
+      if (!minuteResult.allowed || !secondResult.allowed) {
+        const nextResetTime = new Date(
+          Math.max(
+            minuteResult.nextResetTime.getTime(),
+            secondResult.nextResetTime.getTime()
+          )
+        );
         socket.emit(
           "enqueueResult",
           {
             success: false,
             error: "요청 빈도가 너무 높습니다.",
-            nextResetTime: result.nextResetTime,
+            nextResetTime,
           },
           requestId
         );
@@ -216,7 +240,8 @@ app.prepare().then(() => {
     socket.on("disconnect", () => {
       console.log("Client disconnected:", socket.id);
       activeSocketIds.delete(socket.id);
-      socketBuckets.delete(socket.id);
+      socketMinuteBuckets.delete(socket.id);
+      socketSecondBuckets.delete(socket.id);
       const timeout = socketTimeouts.get(socket.id);
       if (timeout) {
         clearTimeout(timeout);
