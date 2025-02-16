@@ -2,24 +2,41 @@ import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import { queue } from "./shared/lib/queue";
+import { config } from "./shared/config";
+
+type TimeUnit = "second" | "minute" | "hour" | "day";
 
 class LeakyBucket {
   private capacity: number;
-  private leakRate: number; // 분당 처리할 수 있는 요청 수
+  private leakRate: number;
   private lastLeakTime: number;
   private tokens: number;
+  private timeUnitInSeconds: number;
 
-  constructor(capacity: number, leakRatePerMinute: number) {
+  constructor(
+    capacity: number,
+    leakRate: number,
+    timeUnit: TimeUnit = "second"
+  ) {
     this.capacity = capacity;
-    this.leakRate = leakRatePerMinute;
+    this.leakRate = leakRate;
     this.lastLeakTime = Date.now();
     this.tokens = 0;
+
+    // 시간 단위를 초 단위로 변환
+    this.timeUnitInSeconds = {
+      second: 1,
+      minute: 60,
+      hour: 3600,
+      day: 86400,
+    }[timeUnit];
   }
 
   private leak() {
     const now = Date.now();
-    const elapsedMinutes = (now - this.lastLeakTime) / (1000 * 60);
-    const leakedTokens = Math.floor(elapsedMinutes * this.leakRate);
+    const elapsedTimeUnits =
+      (now - this.lastLeakTime) / (1000 * this.timeUnitInSeconds);
+    const leakedTokens = Math.floor(elapsedTimeUnits * this.leakRate);
 
     this.tokens = Math.max(0, this.tokens - leakedTokens);
     this.lastLeakTime = now;
@@ -28,8 +45,10 @@ class LeakyBucket {
   tryConsume(): { allowed: boolean; nextResetTime: Date } {
     this.leak();
 
-    const minutesToNextToken = 1 / this.leakRate;
-    const nextResetTime = new Date(Date.now() + minutesToNextToken * 60 * 1000);
+    const timeUnitsToNextToken = 1 / this.leakRate;
+    const nextResetTime = new Date(
+      Date.now() + timeUnitsToNextToken * this.timeUnitInSeconds * 1000
+    );
 
     if (this.tokens < this.capacity) {
       this.tokens++;
@@ -44,7 +63,7 @@ class LeakyBucket {
 const socketMinuteBuckets = new Map<string, LeakyBucket>();
 const socketSecondBuckets = new Map<string, LeakyBucket>();
 const socketTimeouts = new Map<string, NodeJS.Timeout>();
-const SOCKET_TIMEOUT = parseInt(process.env.SOCKET_TIMEOUT || "5000"); // 5초 동안 사용하지 않으면 연결 해제
+const SOCKET_TIMEOUT = config.socketTimeoutMs;
 
 // 소켓 활성 상태 추적
 const activeSocketIds = new Set<string>();
@@ -144,16 +163,14 @@ app.prepare().then(() => {
     // 소켓별 리키버킷 생성
     socketMinuteBuckets.set(
       socket.id,
-      new LeakyBucket(
-        parseInt(process.env.LEAKY_BUCKET_CAPACITY || "18"),
-        parseInt(process.env.LEAKY_BUCKET_LEAK_RATE_PER_MINUTE || "12")
-      )
+      new LeakyBucket(config.capacity, config.leakRatePerMinute, "minute")
     );
     socketSecondBuckets.set(
       socket.id,
       new LeakyBucket(
-        parseInt(process.env.LEAKY_BUCKET_CAPACITY_PER_SECOND || "3"),
-        parseInt(process.env.LEAKY_BUCKET_LEAK_RATE_PER_SECOND || "1") * 60 // 초당 비율을 분당 비율로 변환
+        config.capacityPerSecond,
+        config.leakRatePerSecond,
+        "second"
       )
     );
     resetSocketTimeout(); // 초기 타임아웃 설정
