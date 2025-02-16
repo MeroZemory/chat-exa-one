@@ -146,6 +146,7 @@ export default function Home() {
     function onConnect() {
       setIsConnected(true);
       setTransport(socket.io.engine.transport.name);
+      setLastErrorMessage(null);
       console.log("Connected to socket");
 
       // 재연결시 서버의 현재 상태와 클라이언트의 pending 항목들을 비교
@@ -305,6 +306,8 @@ export default function Home() {
   const handleSubmit = async () => {
     if (!prompt.trim()) return;
     if (waitStatus.isCooldown) return;
+
+    setLastErrorMessage(null);
 
     // 연결이 끊어진 상태면 재연결 시도
     if (!isConnected) {
