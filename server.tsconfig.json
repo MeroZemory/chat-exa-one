@@ -4,7 +4,7 @@
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
-    "outDir": "dist",
+    "outDir": ".server",
     "sourceMap": true
   },
   "include": ["server.ts", "shared/**/*"],

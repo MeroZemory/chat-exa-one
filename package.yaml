@@ -1,0 +1,58 @@
+# Chat ExaOne 프로젝트 설정
+name: chat-exa-one
+version: 0.1.0
+private: true
+
+scripts:
+  # YAML 변환
+  yaml: node yaml-to-json.mjs
+  
+  # 개발 관련 스크립트
+  dev:tsc: tsc -p server.tsconfig.json --watch
+  dev:server: nodemon --watch build --exec "node .server/server.js"
+  dev: npm run yaml && rimraf dist && npm run build-server && concurrently "npm run dev:tsc" "npm run dev:server"
+  
+  # 디버그
+  debug: cross-env NODE_OPTIONS='--inspect' npm run dev
+
+  # 빌드 관련 스크립트
+  build-server: tsc -p server.tsconfig.json
+  build-next: next build
+  build: npm run yaml && npm run build-server && npm run build-next
+
+  # 배포 관련 스크립트
+  dist: rimraf .server .next dist && npm run build && copyfiles -f .server/* dist/ && copyfiles -f .next/* dist/
+  
+  # 서버 실행
+  start: cross-env NODE_ENV=production node dist/server.js
+  
+  # 기타
+  lint: npm run yaml && next lint
+
+# 프로덕션 의존성
+dependencies:
+  next: 15.1.7
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  react-hot-toast: ^2.5.2
+  socket.io: ^4.8.1
+
+# 개발 의존성
+devDependencies:
+  "@eslint/eslintrc": ^3
+  "@types/node": ^20.17.19
+  "@types/react": ^19
+  "@types/react-dom": ^19
+  concurrently: ^9.1.2
+  cross-env: ^7.0.3
+  eslint: ^9
+  eslint-config-next: 15.1.7
+  js-yaml: ^4.1.0
+  nodemon: ^3.1.9
+  postcss: ^8
+  prettier: ^3.5.1
+  rimraf: ^6.0.1
+  socket.io-client: ^4.8.1
+  tailwindcss: ^3.4.1
+  ts-node: ^10.9.2
+  typescript: ^5.7.3 
