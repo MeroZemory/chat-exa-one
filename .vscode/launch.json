@@ -7,21 +7,18 @@
         {
             "type": "node-terminal",
             "request": "launch",
-            "name": "Next.js: debug server-side",
-            "command": "npm run dev",
-            "sourceMaps": true,
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/**",
-                "!**/node_modules/**"
-            ],
+            "name": "Debug Server",
+            "command": "npm run debug",
             "skipFiles": [
-                "<node_internals>/**"
-            ],
+                "<node_internals>/**",
+                "${workspaceFolder}/node_modules/**",
+                "${workspaceFolder}/.next/**"
+            ]
         },
         {
             "type": "chrome",
             "request": "launch",
-            "name": "Next.js: debug client-side",
+            "name": "Debug Frontend",
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}",
             "sourceMapPathOverrides": {
@@ -31,10 +28,10 @@
     ],
     "compounds": [
         {
-            "name": "Next.js: debug full stack",
+            "name": "Debug Full Stack",
             "configurations": [
-                "Next.js: debug server-side",
-                "Next.js: debug client-side"
+                "Debug Server",
+                "Debug Frontend"
             ]
         }
     ]

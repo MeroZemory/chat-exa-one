@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:tsc": "cross-env NODE_OPTIONS='--inspect=9229' tsc -p server.tsconfig.json --watch",
-    "dev:server": "cross-env NODE_OPTIONS='--inspect=9230' nodemon --watch dist --exec \"cross-env NODE_OPTIONS='--inspect=9231' node dist/server.js\"",
+    "dev:tsc": "tsc -p server.tsconfig.json --watch",
+    "dev:server": "nodemon --watch dist --exec \"node dist/server.js\"",
     "predev": "rimraf dist && npm run build-server",
     "dev": "concurrently \"npm run dev:tsc\" \"npm run dev:server\"",
     "build-server": "next build && tsc -p server.tsconfig.json",
     "start": "cross-env NODE_ENV=production node dist/server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "debug": "cross-env NODE_OPTIONS='--inspect' concurrently \"npm run dev:tsc\" \"npm run dev:server\""
   },
   "dependencies": {
     "next": "15.1.7",
