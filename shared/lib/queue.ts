@@ -12,7 +12,8 @@ type QueueEventCallback = (item: QueueItem) => void;
 
 // 전역 상태를 위한 모듈
 interface QueueState {
-  items: QueueItem[];
+  pendingItems: QueueItem[]; // 처리 대기 중인 항목들
+  historyItems: QueueItem[]; // 처리 완료된 이력
   currentSequence: number;
 }
 
@@ -23,7 +24,8 @@ let queueState: QueueState | undefined;
 function getQueueState(): QueueState {
   if (!queueState) {
     queueState = {
-      items: [],
+      pendingItems: [],
+      historyItems: [],
       currentSequence: 0,
     };
   }
@@ -37,7 +39,10 @@ class Queue {
 
   private constructor() {
     // 큐가 비어있을 때만 테스트 데이터 추가
-    if (getQueueState().items.length === 0) {
+    if (
+      getQueueState().pendingItems.length === 0 &&
+      getQueueState().historyItems.length === 0
+    ) {
       this.addTestData();
     }
   }
@@ -92,14 +97,23 @@ class Queue {
       updatedAt: new Date(),
       ...initialData,
     };
-    state.items.push(item);
+
+    // completed나 failed 상태인 경우 이력에 추가, 그 외에는 대기 큐에 추가
+    if (item.status === "completed" || item.status === "failed") {
+      state.historyItems.push(item);
+    } else {
+      state.pendingItems.push(item);
+    }
+
     this.notifyItemAdded(item);
     return item;
   }
 
   dequeue(): QueueItem | undefined {
     const state = getQueueState();
-    const pendingItem = state.items.find((item) => item.status === "pending");
+    const pendingItem = state.pendingItems.find(
+      (item: QueueItem) => item.status === "pending"
+    );
     if (pendingItem) {
       pendingItem.status = "processing";
       pendingItem.updatedAt = new Date();
@@ -109,25 +123,55 @@ class Queue {
   }
 
   getItem(id: string): QueueItem | undefined {
-    return getQueueState().items.find((item) => item.id === id);
+    const state = getQueueState();
+    return (
+      getQueueState().pendingItems.find((item: QueueItem) => item.id === id) ||
+      getQueueState().historyItems.find((item: QueueItem) => item.id === id)
+    );
   }
 
   getAllItems(): QueueItem[] {
-    return [...getQueueState().items];
+    // 이력 큐에서만 가져오기
+    return getQueueState().historyItems.filter(
+      (item: QueueItem) =>
+        item.status === "completed" || item.status === "failed"
+    );
   }
 
   getItemsAfterSequence(sequence: number): QueueItem[] {
-    return getQueueState().items.filter((item) => item.sequence > sequence);
+    // 이력 큐에서 특정 시퀀스 이후의 항목만 가져오기
+    return getQueueState().historyItems.filter(
+      (item: QueueItem) => item.sequence > sequence
+    );
   }
 
   updateItem(id: string, update: Partial<QueueItem>): QueueItem | undefined {
     const state = getQueueState();
-    const item = state.items.find((item) => item.id === id);
-    if (item) {
+
+    // 먼저 대기 큐에서 찾기
+    const pendingIndex = state.pendingItems.findIndex((item) => item.id === id);
+    if (pendingIndex !== -1) {
+      const item = state.pendingItems[pendingIndex];
       Object.assign(item, { ...update, updatedAt: new Date() });
+
+      // completed나 failed 상태로 변경된 경우 이력으로 이동
+      if (item.status === "completed" || item.status === "failed") {
+        state.pendingItems.splice(pendingIndex, 1);
+        state.historyItems.push(item);
+      }
+
       this.notifyItemUpdated(item);
       return item;
     }
+
+    // 이력 큐에서 찾기
+    const historyItem = state.historyItems.find((item) => item.id === id);
+    if (historyItem) {
+      Object.assign(historyItem, { ...update, updatedAt: new Date() });
+      this.notifyItemUpdated(historyItem);
+      return historyItem;
+    }
+
     return undefined;
   }
 

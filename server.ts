@@ -12,17 +12,34 @@ const handler = app.getRequestHandler();
 
 // 메시지 처리 워커 함수
 async function processMessages() {
+  let currentProcessingSequence = 0;
+
   while (true) {
     const item = queue.dequeue();
     if (item) {
       try {
+        // 현재 처리 중인 시퀀스 업데이트
+        currentProcessingSequence = item.sequence;
+        console.log(
+          `Processing message #${currentProcessingSequence}: ${item.prompt}`
+        );
+
         // 실제 ExaOne API 호출 대신 임시로 에코 응답
+        await new Promise((resolve) => setTimeout(resolve, 250));
+
         queue.updateItem(item.id, {
           status: "completed",
-          result: `응답은 이제 구현해야 합니다. 서버 시간: ${new Date().toLocaleString()}`,
+          result: `[시퀀스 #${item.sequence}] 응답: ${
+            item.prompt
+          }\n처리 시간: ${new Date().toLocaleString()}`,
         });
+
+        console.log(`Completed message #${currentProcessingSequence}`);
       } catch (error) {
-        console.error("Message processing failed:", error);
+        console.error(
+          `Failed to process message #${currentProcessingSequence}:`,
+          error
+        );
         queue.updateItem(item.id, {
           status: "failed",
           result: error instanceof Error ? error.message : "Unknown error",
@@ -40,18 +57,17 @@ app.prepare().then(() => {
   const io = new Server(httpServer, { path: "/api/socketio" });
 
   // Queue 이벤트 리스너 설정
-  queue.onItemAdded((item) => {
-    io.emit("itemAdded", item);
-  });
-
   queue.onItemUpdated((item) => {
-    io.emit("itemUpdated", item);
+    // completed나 failed 상태일 때만 클라이언트에 알림
+    if (item.status === "completed" || item.status === "failed") {
+      io.emit("itemUpdated", item);
+    }
   });
 
   io.on("connection", (socket) => {
     console.log("Client connected");
 
-    // 클라이언트 연결 시 전체 큐 목록 전송
+    // 클라이언트 연결 시 전체 큐 목록 전송 (이력만)
     socket.emit("itemsSync", queue.getAllItems());
 
     // 클라이언트가 특정 시퀀스 이후의 아이템을 요청할 때

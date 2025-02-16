@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Socket } from "socket.io-client";
 import { socket } from "../socket"; // 기존 socket 인스턴스 import
+import React from "react";
 
 interface QueueItem {
   id: string;
@@ -75,59 +76,35 @@ export default function Home() {
       }
     }
 
-    // 새로운 항목 추가 이벤트
-    function onItemAdded(item: QueueItem) {
-      console.log("Received itemAdded:", item);
-      setItems((prev) => {
-        // 이미 존재하는 항목이면 무시
-        if (prev.some((i) => i.sequence === item.sequence)) return prev;
-
-        // 적절한 위치 찾기 (내림차순)
-        const index = prev.findIndex((i) => i.sequence < item.sequence);
-        const newItems = [...prev];
-        if (index === -1) {
-          newItems.push(item);
-        } else {
-          newItems.splice(index, 0, item);
-        }
-        return newItems;
-      });
-      // 대기 중인 항목이었다면 제거
-      setPendingItems((prev) => {
-        const { [item.id]: removed, ...rest } = prev;
-        return rest;
-      });
-    }
-
     // 항목 업데이트 이벤트
     function onItemUpdated(updatedItem: QueueItem) {
       console.log("Received itemUpdated:", updatedItem);
-      if (updatedItem.status !== "pending") {
-        // 상태 업데이트를 하나의 배치로 처리
-        const updateStates = () => {
-          setPendingItems((prev) => {
-            const { [updatedItem.id]: removed, ...rest } = prev;
-            return rest;
-          });
-          setItems((prev) =>
-            prev.map((item) =>
-              item.id === updatedItem.id ? updatedItem : item
-            )
-          );
-        };
-        updateStates();
-      } else {
-        setItems((prev) =>
-          prev.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+
+      // 해당 ID의 항목만 pendingItems에서 제거
+      setPendingItems((prev) => {
+        const newPendingItems = { ...prev };
+        delete newPendingItems[updatedItem.id];
+        return newPendingItems;
+      });
+
+      setItems((prev) => {
+        const newItems = [...prev];
+        const index = newItems.findIndex(
+          (i) => i.sequence < updatedItem.sequence
         );
-      }
+        if (index === -1) {
+          newItems.push(updatedItem);
+        } else {
+          newItems.splice(index, 0, updatedItem);
+        }
+        return newItems;
+      });
     }
 
     // 큐 아이템 추가 결과 이벤트
     function onEnqueueResult(result: EnqueueResult) {
       console.log("Received enqueueResult:", result);
       if (result.success && result.item) {
-        // 응답 받은 항목을 pendingItems에 추가
         setPendingItems((prev) => ({
           ...prev,
           [result.item!.id]: result.item!,
@@ -142,7 +119,6 @@ export default function Home() {
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("itemsSync", onItemsSync);
-    socket.on("itemAdded", onItemAdded);
     socket.on("itemUpdated", onItemUpdated);
     socket.on("enqueueResult", onEnqueueResult);
 
@@ -150,7 +126,6 @@ export default function Home() {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("itemsSync", onItemsSync);
-      socket.off("itemAdded", onItemAdded);
       socket.off("itemUpdated", onItemUpdated);
       socket.off("enqueueResult", onEnqueueResult);
     };
@@ -262,7 +237,7 @@ export default function Home() {
                   <span className="text-gray-500 text-sm mr-2">
                     #{item.sequence}
                   </span>
-                  {item.prompt}
+                  <pre>{item.prompt}</pre>
                 </p>
                 <span
                   className={`px-2 py-1 rounded text-sm ${
@@ -279,7 +254,7 @@ export default function Home() {
                 </span>
               </div>
               {item.result && (
-                <p className="text-gray-600 mt-2">{item.result}</p>
+                <pre className="text-gray-600 mt-2">{item.result}</pre>
               )}
               <div className="text-sm text-gray-500 mt-2">
                 생성: {new Date(item.createdAt).toLocaleString()}
