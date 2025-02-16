@@ -8,7 +8,7 @@
             "type": "node-terminal",
             "request": "launch",
             "name": "Debug Server",
-            "command": "npm run debug",
+            "command": "npm run dev",
             "skipFiles": [
                 "<node_internals>/**",
                 "${workspaceFolder}/node_modules/**",

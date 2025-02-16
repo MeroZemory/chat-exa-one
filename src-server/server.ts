@@ -95,9 +95,8 @@ async function processMessages() {
 
         queue.updateItem(item.id, {
           status: "completed",
-          result: `[시퀀스 #${item.sequence}] 응답: ${
-            item.prompt
-          }\n처리 시간: ${new Date().toLocaleString()}`,
+          result: `[#${item.sequence}] ${item.prompt}`,
+          processedAt: new Date(),
         });
 
         console.log(`Completed message #${currentProcessingSequence}`);

@@ -8,6 +8,7 @@ export interface QueueItem {
   result?: string;
   createdAt: Date;
   updatedAt: Date;
+  processedAt?: Date;
 }
 
 type QueueEventCallback = (item: QueueItem) => void;
@@ -50,15 +51,7 @@ class Queue {
   }
 
   private addTestData() {
-    const testItems: Omit<QueueItem, "id" | "sequence">[] = [
-      {
-        prompt: "안녕",
-        status: "completed",
-        result: "네, 안녕하세요! 저도 반갑습니다.",
-        createdAt: new Date(Date.now() - 3600000), // 1시간 전
-        updatedAt: new Date(Date.now() - 3590000), // 59분 50초 전
-      },
-    ];
+    const testItems: Omit<QueueItem, "id" | "sequence">[] = [];
 
     testItems.forEach((item) => {
       this.enqueue(item.prompt, item);

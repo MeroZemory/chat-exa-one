@@ -12,6 +12,7 @@ interface QueueItem {
   result?: string;
   createdAt: string | Date;
   updatedAt: string | Date;
+  processedAt: string | Date;
 }
 
 interface QueueItemUpdate {
@@ -475,7 +476,8 @@ export default function Home() {
                 <pre className="text-gray-600 mt-2">{item.result}</pre>
               )}
               <div className="text-sm text-gray-500 mt-2">
-                생성: {new Date(item.createdAt).toLocaleString()}
+                {item.processedAt &&
+                  `처리: ${new Date(item.processedAt).toLocaleString()}`}
               </div>
             </div>
           ))}
