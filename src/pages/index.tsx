@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { socket } from "../socket"; // 기존 socket 인스턴스 import
 import React from "react";
 import toast from "react-hot-toast";
+import { v4 as uuidv4 } from "uuid";
 
 interface QueueItem {
   id: string;
@@ -333,7 +334,7 @@ export default function Home() {
       });
     }
 
-    const requestId = crypto.randomUUID();
+    const requestId = uuidv4();
 
     try {
       socket.emit("enqueueItem", prompt.trim(), requestId);

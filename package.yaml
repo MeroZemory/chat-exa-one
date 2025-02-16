@@ -34,7 +34,7 @@ scripts:
   # 서버 실행
   start: >-
     npm install --omit=dev && 
-    cross-env NODE_ENV=production node --experimental-fetch --experimental-global-webcrypto server/server.js
+    cross-env NODE_ENV=production node --experimental-fetch server/server.js
   
   start:local: >-
     cd dist && npm run start
@@ -50,7 +50,6 @@ dependencies:
   react-hot-toast: ^2.5.2
   socket.io: ^4.8.1
   cross-env: ^7.0.3
-  uuid: ^9.0.1
 
 # 개발 의존성
 devDependencies:
@@ -59,6 +58,7 @@ devDependencies:
   "@types/react": ^19
   "@types/react-dom": ^19
   "@types/uuid": ^9.0.8
+  uuid: ^9.0.1
   concurrently: ^9.1.2
   copyfiles: ^2.4.1
   eslint: ^9
