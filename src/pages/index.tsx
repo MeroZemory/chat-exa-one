@@ -58,9 +58,6 @@ export default function Home() {
   const lastSequenceRef = useRef<number>(0);
   const cooldownTimerRef = useRef<NodeJS.Timeout>(null);
   const [isInputActive, setIsInputActive] = useState(false);
-  const [reconnectDeadline, setReconnectDeadline] = useState<number | null>(
-    null
-  );
 
   // 소켓 연결 상태 풀링
   useEffect(() => {
@@ -150,30 +147,10 @@ export default function Home() {
     }
   }, [waitStatus]);
 
-  // 재연결 데드라인 체크
-  useEffect(() => {
-    if (!reconnectDeadline) return;
-
-    const checkReconnection = () => {
-      const timeLeft = reconnectDeadline - Date.now();
-
-      if (timeLeft <= 0) {
-        setReconnectDeadline(null);
-        setLastErrorMessage("서버 연결에 실패했습니다.");
-        return;
-      }
-
-      setTimeout(checkReconnection, timeLeft);
-    };
-
-    checkReconnection();
-  }, [reconnectDeadline]);
-
   // 소켓 이벤트 핸들러 등록
   useEffect(() => {
     function onConnect() {
       setIsConnected(true);
-      setReconnectDeadline(null);
       setTransport(socket.io.engine.transport.name);
       setLastErrorMessage(null);
       console.log("Connected to socket");
@@ -338,9 +315,24 @@ export default function Home() {
 
     setLastErrorMessage(null);
 
+    // 연결이 끊어진 상태면 재연결 시도
     if (!isConnected) {
       socket.connect();
-      if (!socket.connected) return;
+      await new Promise((resolve) => {
+        const onConnect = () => {
+          socket.off("connect", onConnect);
+          resolve(true);
+        };
+        socket.on("connect", onConnect);
+        // 3초 이내 연결 실패시 에러
+        setTimeout(() => {
+          if (!socket.connected) {
+            socket.off("connect", onConnect);
+            setLastErrorMessage("서버 연결에 실패했습니다.");
+          }
+          resolve(false);
+        }, 3000);
+      });
     }
 
     const requestId = uuidv4();
