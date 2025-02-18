@@ -71,7 +71,9 @@ export default function Home() {
 
   // 신규 데이터 체크 함수
   const checkNewData = () => {
+    console.log("checkNewData");
     socket.emit("getCurrentSequence", (serverSequence: number) => {
+      console.log(`getCurrentSequence: ${serverSequence}`);
       // 서버 시퀀스가 더 크면 신규 데이터 있음
       if (serverSequence > lastSequenceRef.current) {
         socket.emit("itemsSync"); // 전체 목록 다시 요청
@@ -177,10 +179,10 @@ export default function Home() {
   // 소켓 이벤트 핸들러 등록
   useEffect(() => {
     function onConnect() {
+      console.log("Connected to socket");
       setIsConnected(true);
       setTransport(socket.io.engine.transport.name);
       setLastErrorMessage(null);
-      console.log("Connected to socket");
 
       // 연결되면 신규 데이터 체크
       checkNewData();
@@ -210,9 +212,9 @@ export default function Home() {
     }
 
     function onDisconnect() {
+      console.log("Disconnected from socket");
       setIsConnected(false);
       setTransport("N/A");
-      console.log("Disconnected from socket");
     }
 
     // 서버에서 전체 큐 목록을 전달할 때
@@ -294,6 +296,7 @@ export default function Home() {
 
     // 큐 아이템 추가 결과 이벤트
     function onEnqueueResult(result: EnqueueResult, responseId: string) {
+      console.log("Received enqueueResult:", result, responseId);
       if (
         !result.success &&
         result.error?.includes("요청 빈도가 너무 높습니다")
