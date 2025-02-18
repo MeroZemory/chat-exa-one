@@ -59,6 +59,7 @@ export default function Home() {
   const cooldownTimerRef = useRef<NodeJS.Timeout>(null);
   const checkNewDataTimerRef = useRef<NodeJS.Timeout>(null);
   const [isInputActive, setIsInputActive] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // 다음 체크 예약
   const scheduleNextCheck = () => {
@@ -343,9 +344,12 @@ export default function Home() {
     if (waitStatus.isCooldown) return;
 
     setLastErrorMessage(null);
+    setIsConnecting(true);
 
     // 연결 보장
     const connected = await ensureConnection();
+    setIsConnecting(false);
+
     if (!connected) {
       setLastErrorMessage("서버 연결에 실패했습니다.");
       return;
@@ -423,14 +427,18 @@ export default function Home() {
             />
             <button
               type="button"
-              disabled={waitStatus.isCooldown || !prompt.trim()}
+              disabled={waitStatus.isCooldown || !prompt.trim() || isConnecting}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors relative group"
               onClick={handleSubmit}
             >
-              {waitStatus.isCooldown ? "처리 중..." : "요청 추가"}
-              {waitStatus.isCooldown && (
+              {waitStatus.isCooldown
+                ? "처리 중..."
+                : isConnecting
+                  ? "연결 중..."
+                  : "요청 추가"}
+              {(waitStatus.isCooldown || isConnecting) && (
                 <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                  쿨다운 중
+                  {waitStatus.isCooldown ? "쿨다운 중" : "서버 연결 중"}
                 </span>
               )}
             </button>
