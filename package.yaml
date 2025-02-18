@@ -11,7 +11,7 @@ scripts:
   # 개발 관련 스크립트
   dev:build-server: tsc -p server.tsconfig.json --outDir build-dev/server --watch --pretty --incremental
   dev:next: nodemon --watch build-dev/server src --exec "cross-env DIST_DIR=\"build-dev/.next\" next build && cross-env DIR=\"build-dev\" node build-dev/server/server.js" --delay 1
-  predev: npm run yaml && cross-env NODE_OPTIONS=
+  predev: npm run yaml"
   dev: concurrently -n "build-server,next" -c "blue,green" "npm run dev:build-server" "npm run dev:next"
 
   # 빌드 테스트 스크립트

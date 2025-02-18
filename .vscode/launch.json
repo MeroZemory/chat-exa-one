@@ -9,6 +9,7 @@
             "request": "launch",
             "name": "Debug Server",
             "command": "npm run dev",
+            "autoAttachChildProcesses": false,
             "skipFiles": [
                 "<node_internals>/**",
                 "${workspaceFolder}/node_modules/**",
