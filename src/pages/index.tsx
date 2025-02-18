@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { socket, ensureConnection } from "../socket"; // 기존 socket 인스턴스 import
 import React from "react";
 import toast from "react-hot-toast";
@@ -61,18 +61,15 @@ export default function Home() {
   const [isInputActive, setIsInputActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // 다음 체크 예약
-  const scheduleNextCheck = () => {
+  // 신규 데이터 체크 함수
+  const checkNewData = useCallback(() => {
+    console.log("checkNewData");
+
+    // 다음 체크 예약
     if (checkNewDataTimerRef.current) {
       clearTimeout(checkNewDataTimerRef.current);
     }
     checkNewDataTimerRef.current = setTimeout(checkNewData, 10000);
-  };
-
-  // 신규 데이터 체크 함수
-  const checkNewData = () => {
-    console.log("checkNewData");
-    scheduleNextCheck(); // 무조건 다음 체크 예약
 
     if (!socket.connected) return;
 
@@ -82,7 +79,7 @@ export default function Home() {
         socket.emit("itemsSync");
       }
     });
-  };
+  }, []);
 
   // 소켓 연결 상태 풀링
   useEffect(() => {
@@ -341,7 +338,7 @@ export default function Home() {
       socket.off("itemUpdated", onItemUpdated);
       socket.off("enqueueResult", onEnqueueResult);
     };
-  }, [pendingItems]); // socket is now imported, not from state
+  }, [pendingItems, checkNewData]); // socket is now imported, not from state
 
   // 새로운 요청 추가
   const handleSubmit = async () => {
