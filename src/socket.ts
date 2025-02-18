@@ -10,6 +10,7 @@ export const socket = io(
     : "http://localhost:3000",
   {
     autoConnect: false,
+    path: "/api/socketio",
   }
 );
 
