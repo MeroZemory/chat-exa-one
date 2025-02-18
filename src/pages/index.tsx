@@ -57,7 +57,27 @@ export default function Home() {
   // 마지막 시퀀스 번호를 ref로 관리 (항목 순서 관리)
   const lastSequenceRef = useRef<number>(0);
   const cooldownTimerRef = useRef<NodeJS.Timeout>(null);
+  const checkNewDataTimerRef = useRef<NodeJS.Timeout>(null);
   const [isInputActive, setIsInputActive] = useState(false);
+
+  // 다음 체크 예약
+  const scheduleNextCheck = () => {
+    if (checkNewDataTimerRef.current) {
+      clearTimeout(checkNewDataTimerRef.current);
+    }
+    checkNewDataTimerRef.current = setTimeout(checkNewData, 10000);
+  };
+
+  // 신규 데이터 체크 함수
+  const checkNewData = () => {
+    socket.emit("getCurrentSequence", (serverSequence: number) => {
+      // 서버 시퀀스가 더 크면 신규 데이터 있음
+      if (serverSequence > lastSequenceRef.current) {
+        socket.emit("itemsSync"); // 전체 목록 다시 요청
+      }
+      scheduleNextCheck();
+    });
+  };
 
   // 소켓 연결 상태 풀링
   useEffect(() => {
@@ -66,7 +86,13 @@ export default function Home() {
       setIsConnected(isConnected);
     };
     const interval = setInterval(checkConnection, 100);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      if (checkNewDataTimerRef.current) {
+        clearTimeout(checkNewDataTimerRef.current);
+      }
+    };
   }, []);
 
   // 입력 가능 상태가 되면 포커스 복원
@@ -154,6 +180,9 @@ export default function Home() {
       setTransport(socket.io.engine.transport.name);
       setLastErrorMessage(null);
       console.log("Connected to socket");
+
+      // 연결되면 신규 데이터 체크
+      checkNewData();
 
       // 재연결시 서버의 현재 상태와 클라이언트의 pending 항목들을 비교
       setPendingItems((prev) => {
