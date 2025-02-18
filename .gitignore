@@ -42,6 +42,7 @@ next-env.d.ts
 
 
 # build & dist
-.server
-.next
+build-test
+build-dev
+build-dist
 dist

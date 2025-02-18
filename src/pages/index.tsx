@@ -366,7 +366,7 @@ export default function Home() {
     <div className="min-h-screen p-8">
       <main className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">ExaOne 3.5 큐 시스템</h1>
+          <h1 className="text-3xl font-bold">Chat EXA One 3.5</h1>
           {isConnected && (
             <div className="text-xs text-green-600">
               서버 연결됨 ({transport})

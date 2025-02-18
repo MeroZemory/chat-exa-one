@@ -20,13 +20,23 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@server/*": [
+        "./src-server/*"
       ]
-    }
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "build-*/.next/types/**/*.ts",
+    "next-env.d.ts",
   ],
   "exclude": [
     "node_modules"
