@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { socket } from "../socket"; // 기존 socket 인스턴스 import
+import { socket, ensureConnection } from "../socket"; // 기존 socket 인스턴스 import
 import React from "react";
 import toast from "react-hot-toast";
 import { v4 as uuidv4 } from "uuid";
@@ -315,24 +315,11 @@ export default function Home() {
 
     setLastErrorMessage(null);
 
-    // 연결이 끊어진 상태면 재연결 시도
-    if (!isConnected) {
-      socket.connect();
-      await new Promise((resolve) => {
-        const onConnect = () => {
-          socket.off("connect", onConnect);
-          resolve(true);
-        };
-        socket.on("connect", onConnect);
-        // 3초 이내 연결 실패시 에러
-        setTimeout(() => {
-          if (!socket.connected) {
-            socket.off("connect", onConnect);
-            setLastErrorMessage("서버 연결에 실패했습니다.");
-          }
-          resolve(false);
-        }, 3000);
-      });
+    // 연결 보장
+    const connected = await ensureConnection();
+    if (!connected) {
+      setLastErrorMessage("서버 연결에 실패했습니다.");
+      return;
     }
 
     const requestId = uuidv4();

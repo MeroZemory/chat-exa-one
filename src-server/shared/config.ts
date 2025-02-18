@@ -4,6 +4,7 @@ interface RateLimitConfig {
   capacityPerSecond: number;
   leakRatePerSecond: number;
   socketTimeoutMs: number;
+  socketReconnectTimeoutMs: number;
 }
 
 const productionConfig: RateLimitConfig = {
@@ -12,6 +13,7 @@ const productionConfig: RateLimitConfig = {
   capacityPerSecond: 3,
   leakRatePerSecond: 1,
   socketTimeoutMs: 5000,
+  socketReconnectTimeoutMs: 3000,
 };
 
 const developmentConfig: RateLimitConfig = {
@@ -20,6 +22,7 @@ const developmentConfig: RateLimitConfig = {
   capacityPerSecond: 30,
   leakRatePerSecond: 10,
   socketTimeoutMs: 2000,
+  socketReconnectTimeoutMs: 3000,
 };
 
 export const config =
