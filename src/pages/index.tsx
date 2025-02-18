@@ -72,13 +72,15 @@ export default function Home() {
   // 신규 데이터 체크 함수
   const checkNewData = () => {
     console.log("checkNewData");
+    scheduleNextCheck(); // 무조건 다음 체크 예약
+
+    if (!socket.connected) return;
+
     socket.emit("getCurrentSequence", (serverSequence: number) => {
       console.log(`getCurrentSequence: ${serverSequence}`);
-      // 서버 시퀀스가 더 크면 신규 데이터 있음
       if (serverSequence > lastSequenceRef.current) {
-        socket.emit("itemsSync"); // 전체 목록 다시 요청
+        socket.emit("itemsSync");
       }
-      scheduleNextCheck();
     });
   };
 
